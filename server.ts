@@ -1,12 +1,13 @@
 import "https://deno.land/x/dotenv@v2.0.0/load.ts";
-import { Application, Router } from "https://deno.land/x/oak/mod.ts";
+import { Application, Router, Status} from "https://deno.land/x/oak/mod.ts";
 import { App as SlackApp  } from "https://deno.land/x/slack_bolt@1.0.0/mod.ts";
-import * as util from "./utilities.ts"
-import * as messageFactory from "./message.ts"
+import * as util from "./utilities.ts";
+import * as messageFactory from "./message.ts";
 
-const SLACK_TOKEN = Deno.env.get("SLACK_BOT_TOKEN")
-const DISPATCH_CHANNEL = Deno.env.get("DISPATCH_CHANNEL")
-const RESPONDING_CHANNEL = Deno.env.get("RESPONDING_CHANNEL")
+const SLACK_TOKEN = Deno.env.get("SLACK_BOT_TOKEN");
+const DISPATCH_CHANNEL = Deno.env.get("DISPATCH_CHANNEL");
+const RESPONDING_CHANNEL = Deno.env.get("RESPONDING_CHANNEL");
+const AUTH_TOKEN = Deno.env.get("AUTH_TOKEN");
 
 const slackApp = new SlackApp({
     signingSecret: Deno.env.get("SLACK_SIGNING_SECRET"),
@@ -14,11 +15,33 @@ const slackApp = new SlackApp({
     ignoreSelf:true,
     });
 
+function authorize_request(request, ctx): boolean {
+    if (request == null){
+        ctx.response.body = "No authentication token provided.\n";
+        console.log("No authentication token provided.");
+        ctx.response.type = "text/plain";
+        ctx.response.status = Status.BadRequest;
+        return false;
+    }
+    else if (request.token != AUTH_TOKEN){
+        ctx.response.body = "Invalid authentication token provided.\n";
+        console.log("Invalid authentication token provided.");
+        ctx.response.type = "text/plain";
+        ctx.response.status = Status.Forbidden;
+        return false;
+    }
+    else
+        return true;
+}
+
 const app = new Application();
 
 const router = new Router();
 
 router.post("/dispatch", async (ctx) => {
+    const req = await ctx.request.body().value;
+    if (!authorize_request(req, ctx)) return;
+
     let dateTime = util.makeDate();
     let dispatchBlock = messageFactory.generateDispatchMessage(dateTime);
     let slackMessage = {token: SLACK_TOKEN, blocks: dispatchBlock, text: "RPI Ambulance Dispatched on " + util.makeDate()};
@@ -33,7 +56,7 @@ router.post("/dispatch", async (ctx) => {
     else if(typeof crewNeeded == "boolean" && crewNeeded) {
         let toneTest = util.toneTest();
         let text = toneTest ? "Likely to be the weekly pager test." : "A crew is needed";
-        respondingAttachment = messageFactory.generateRespondingAttachment(text, toneTest ? messageFactory.Color.warning : messageFactory.Color.danger, toneTest, true)
+        respondingAttachment = messageFactory.generateRespondingAttachment(text, toneTest ? messageFactory.Color.warning : messageFactory.Color.danger, toneTest, true);
         dispatchAttachment = toneTest ? messageFactory.generateRespondingAttachment(text, toneTest ? messageFactory.Color.warning : messageFactory.Color.danger, toneTest, false) : dispatchAttachment;
     }
     else
@@ -46,10 +69,14 @@ router.post("/dispatch", async (ctx) => {
     let respondingResult = await slackApp.client.chat.postMessage({...slackMessage, 
                                                                channel: RESPONDING_CHANNEL,  
                                                                attachments: respondingAttachment,});
-    ctx.response.body = "Dispatched\n";
+    ctx.response.body = "Tones Recieved\n";
+    console.log("Tones Recieved");
 });
 
 router.post("/long-tone", async (ctx) => {
+    const req = await ctx.request.body().value;
+    if (!authorize_request(req, ctx)) return;
+
     let dateTime = util.makeDate();
     let longtoneMessage = messageFactory.generateLongtoneMessage(dateTime);
 
@@ -63,7 +90,8 @@ router.post("/long-tone", async (ctx) => {
     let dispatchResult = await slackApp.client.chat.postMessage({...slackMessage, channel: DISPATCH_CHANNEL});
 
     let respondingResult = await slackApp.client.chat.postMessage({...slackMessage, channel: RESPONDING_CHANNEL});
-    ctx.response.body = "Long Tone\n";
+    ctx.response.body = "Long Tone Recieved\n";
+    console.log("Long Tone Recieved");
 });
 
 router.post("/slack-response", async (ctx) => {
@@ -77,7 +105,7 @@ router.post("/slack-response", async (ctx) => {
 
     const maxResponseTime = Deno.env.get("RESPONSE_MINUTES") * 60 * 1000;
     const dispatchTime = new Date(payload.message.ts * 1000);
-    const responseTime = new Date(payload.actions[0].action_ts * 1000)
+    const responseTime = new Date(payload.actions[0].action_ts * 1000);
 
     let statusMessage = {token: SLACK_TOKEN, 
                           channel: RESPONDING_CHANNEL};
@@ -88,17 +116,18 @@ router.post("/slack-response", async (ctx) => {
         statusMessage.text = "Your response was logged too long after the dispatch was recieved.";
     }
     else if(actionID == "responding"){
-        statusMessage.attachments = messageFactory.generateResponderStatus(firstName, lastName, true)
+        statusMessage.attachments = messageFactory.generateResponderStatus(firstName, lastName, true);
     }
     else if(actionID == "not_responding"){
-        statusMessage.attachments = messageFactory.generateResponderStatus(firstName, lastName, false)
+        statusMessage.attachments = messageFactory.generateResponderStatus(firstName, lastName, false);
     }
-
     let statusResult;
     if(responseTime - dispatchTime > maxResponseTime)
         statusResult = await slackApp.client.chat.Ephemeral(statusMessage);
-    else 
+    else{
         statusResult = await slackApp.client.chat.postMessage(statusMessage);
+        console.log(firstName.charAt(0) + ". " + lastName + " is " + actionID);
+    }
 });
 
 app.use(router.routes());
