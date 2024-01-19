@@ -68,21 +68,22 @@ router.post("/long-tone", async (ctx) => {
 
 router.post("/slack-response", async (ctx) => {
     const reqBody = await ctx.request.body().value;
+    const payload = JSON.parse(reqBody.get("payload"));
 
-    let userID = reqBody.user.ID;
-    let userInfo = await slackApp.client.users.info({userID});
-    let firstName = userInfo.profile.first_name;
-    let lastName = userInfo.profile.last_name;
+    let userID = payload.user.id;
+    let userInfo = await slackApp.client.users.info({token: SLACK_TOKEN, user:userID});
+    let firstName = userInfo.user.profile.first_name;
+    let lastName = userInfo.user.profile.last_name;
 
     const maxResponseTime = Deno.env.get("RESPONSE_MINUTES") * 60 * 1000;
-    const dispatchTime = new Date(reqBody.message.ts * 1000);
-    const responseTime = new Date(reqBody.actions[0].action_ts * 1000)
+    const dispatchTime = new Date(payload.message.ts * 1000);
+    const responseTime = new Date(payload.actions[0].action_ts * 1000)
 
     let statusMessage = {token: SLACK_TOKEN, 
                           channel: RESPONDING_CHANNEL};
 
-    let actionID = reqBody.actions[0].action_id;
-    if(resonseTime - dispatchTime > maxResponseTime){
+    let actionID = payload.actions[0].action_id;
+    if(responseTime - dispatchTime > maxResponseTime){
         statusMessage.user = userID;
         statusMessage.text = "Your response was logged too long after the dispatch was recieved.";
     }
@@ -96,8 +97,8 @@ router.post("/slack-response", async (ctx) => {
     }
 
     let statusResult;
-    if(resonseTime - dispatchTime > maxResponseTime)
-        tatusResult = await slackApp.client.chat.Ephemeral(statusMessage);
+    if(responseTime - dispatchTime > maxResponseTime)
+        statusResult = await slackApp.client.chat.Ephemeral(statusMessage);
     else 
         statusResult = await slackApp.client.chat.postMessage(statusMessage);
 });

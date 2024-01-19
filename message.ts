@@ -135,4 +135,5 @@ export function generateResponderStatus(firstName: string, lastName: string, sta
     }
     else
         attachment[0].blocks[0].text.text = firstName.charAt(0) + ". " + lastName + " is NOT RESPONDING"
+    return attachment;
 }
