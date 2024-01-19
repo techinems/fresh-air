@@ -89,11 +89,9 @@ router.post("/slack-response", async (ctx) => {
     }
     else if(actionID == "responding"){
         statusMessage.attachments = messageFactory.generateResponderStatus(firstName, lastName, true)
-        statusMessage.text = "*" + firstName.charAt(0) + ". " + lastName + "* is *RESPONDING*";
     }
     else if(actionID == "not_responding"){
         statusMessage.attachments = messageFactory.generateResponderStatus(firstName, lastName, false)
-        statusMessage.text = firstName.charAt(0) + ". " + lastName + " is NOT RESPONDING";
     }
 
     let statusResult;
