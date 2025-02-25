@@ -1,6 +1,8 @@
-import "https://deno.land/x/dotenv@v2.0.0/load.ts";
-import { Application, Router, Status} from "https://deno.land/x/oak/mod.ts";
-import { App as SlackApp  } from "https://deno.land/x/slack_bolt@1.0.0/mod.ts";
+import * as dotenv from "@std/dotenv";
+import { Application } from "jsr:@oak/oak/application";
+import { Router } from "jsr:@oak/oak/router";
+import { Status } from "jsr:@oak/oak";
+import SlackBolt from "npm:@slack/bolt";
 import * as util from "./utilities.ts";
 import * as messageFactory from "./message.ts";
 
@@ -9,7 +11,9 @@ const DISPATCH_CHANNEL = Deno.env.get("DISPATCH_CHANNEL");
 const RESPONDING_CHANNEL = Deno.env.get("RESPONDING_CHANNEL");
 const AUTH_TOKEN = Deno.env.get("AUTH_TOKEN");
 
-const slackApp = new SlackApp({
+const { App } = SlackBolt;
+
+const slackApp = new App({
     signingSecret: Deno.env.get("SLACK_SIGNING_SECRET"),
     token: SLACK_TOKEN,
     ignoreSelf:true,
