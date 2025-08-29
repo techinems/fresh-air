@@ -43,7 +43,7 @@ const app = new Application();
 const router = new Router();
 
 router.post("/dispatch", async (ctx) => {
-    const req = await ctx.request.body().value;
+    const req = await ctx.request.body.json();
     if (!authorize_request(req, ctx)) return;
 
     let dateTime = util.makeDate();
@@ -99,7 +99,7 @@ router.post("/long-tone", async (ctx) => {
 });
 
 router.post("/slack-response", async (ctx) => {
-    const reqBody = await ctx.request.body().value;
+    const reqBody = await ctx.request.body.formData();
     const payload = JSON.parse(reqBody.get("payload"));
 
     let userID = payload.user.id;
